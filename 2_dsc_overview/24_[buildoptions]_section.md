@@ -45,18 +45,18 @@ Valid content is within this section is limited to the following description.
 
 ###### Table 7 EDK II [BuildOptions] Section Elements: Optional Tags
 
-| Tag                                                              | Value                                         | Notes                                                                                             |
-| ---------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `${FAMILY}:${TARGET}_${TAGNAME}_` `${ARCH}_${TOOLCODE}_FLAGS`        | Flags for specific tool codes for this module | Used to specify module specific flags.                                                            |
-| `${FAMILY}:${TARGET}_${TAGNAME}_` `${ARCH}_${TOOLCODE}_PATH`         | The fully qualified path an executable        | Used to replace a specific command, such as forcing the ASL to be iasl, instead of asl.           |
-| `${FAMILY}:${TARGET}_${TAGNAME}_` `${ARCH}_${TOOLCODE}_DPATH`        | A fully qualified path                        | A path that will be added to the system Environment's PATH variable prior to executing a command. |
-| `${FAMILY}:${TARGET}_${TAGNAME}_` `${ARCH}_${TOOLCODE}_${ATTRIBUTE}` | Attribute specific string                     | This permits overriding other attributes if required.                                             |
+| Tag                                                                 | Value                                         | Notes                                                                                             |
+| ------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `${SCOPE}:${TARGET}_${TAGNAME}_` `${ARCH}_${TOOLCODE}_FLAGS`        | Flags for specific tool codes for this module | Used to specify module specific flags.                                                            |
+| `${SCOPE}:${TARGET}_${TAGNAME}_` `${ARCH}_${TOOLCODE}_PATH`         | The fully qualified path an executable        | Used to replace a specific command, such as forcing the ASL to be iasl, instead of asl.           |
+| `${SCOPE}:${TARGET}_${TAGNAME}_` `${ARCH}_${TOOLCODE}_DPATH`        | A fully qualified path                        | A path that will be added to the system Environment's PATH variable prior to executing a command. |
+| `${SCOPE}:${TARGET}_${TAGNAME}_` `${ARCH}_${TOOLCODE}_${ATTRIBUTE}` | Attribute specific string                     | This permits overriding other attributes if required.                                             |
 
 ###### Table 8 EDK II [BuildOptions] Variable Descriptions
 
 | Variable    | Required | Wildcard | Source                                                                                                                                                                                                               |
 | ----------- | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FAMILY`    | NO       | No       | Conf/tools_def.txt defines FAMILY as one of MSFT, INTEL or GCC. Typically, this field is used to help the build tools determine whether the line is used for Microsoft style Makefiles or the GNU style Makefiles.   |
+| `SCOPE`     | NO       | No       | SCOPE may be the FAMILY OR BUILDRULEFAMILY defined in Conf/tools_def.txt. This is used to scope build options and allow BUILDRULEFAMILY to take precedence over FAMILY.                                              |
 |             |          |          | By not specifying the FAMILY, the tools assume the flags are applicable to all families.                                                                                                                             |
 | `TARGET`    | YES      | Yes = *  | `Conf/tools_def.txt` file defines two values:                                                                                                                                                                        |
 |             |          |          | DEBUG and RELEASE. Developers may define additional targets.                                                                                                                                                         |
@@ -125,4 +125,44 @@ the `[BuildOptions.<arch>.EDKII]` sections. For example:
 
 [BuildOptions.IA32.EDKII]
   MSFT:DEBUG_*_IA32_CC_FLAGS = /W4 /WX /Gy
+```
+
+When a scope is provided, a matching BUILDRULEFAMILY will take precedence over any FAMILY scopes in the same
+BuildOptions section.
+
+In the following case:
+
+- An MSFT FAMILY build would simply get `/ALIGN:0x1000` added to the DLINK_FLAGS.
+- A GCC toolchain or CLANGDWARF build would get `-z common-page-size=0x1000` added to the DLINK_FLAGS
+- A CLANGPDB build would get `/ALIGN:0x1000` added to the DLINK_FLAGS because the BUILDRULEFAMILY of CLANGPDB overrides
+  the GCC FAMILY directive.
+
+```ini
+[BuildOptions]
+  MSFT:*_*_*_DLINK_FLAGS = /ALIGN:0x1000
+  GCC: *_*_*_DLINK_FLAGS = -z common-page-size=0x1000
+  CLANGPDB: *_*_*_DLINK_FLAGS = /ALIGN:0x1000
+```
+
+If a DSC contains multiple BuildOptions sections (whether manually written or from an included file), the precedence
+will be evaluated per BuildOptions section and the final result will be picked from each BuildOptions section and
+concatenated per tool. Non-scoped options will always be applied to all toolchains, regardless of other precedence.
+
+In the following case:
+
+- An MSFT FAMILY build would get `/O1b2s -D DISABLE_NEW_DEPRECATED_INTERFACES /Wx`.
+- A GCC toolchain or CLANGPDB build would get `-Os -D DISABLE_NEW_DEPRECATED_INTERFACES -Wall`.
+- A CLANGDWARF build would get `-Oz -D DISABLE_NEW_DEPRECATED_INTERFACES -Wall`.
+
+```ini
+[BuildOptions]
+  MSFT:*_*_*_CC_FLAGS = /O1b2s
+  GCC: *_*_*_CC_FLAGS = -Os
+  CLANGDWARF: *_*_*_CC_FLAGS = -Oz
+  *_*_*_CC_FLAGS = -D DISABLE_NEW_DEPRECATED_INTERFACES
+
+# Second BuildOptions section, either directly written in the file or !included from a .dsc.inc file
+[BuildOptions]
+  MSFT:*_*_*_CC_FLAGS = /Wx
+  GCC: *_*_*_CC_FLAGS = -Wall
 ```

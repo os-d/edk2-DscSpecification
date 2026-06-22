@@ -78,17 +78,22 @@ replacement) is:
 * INF File's `[BuildOptions]` section
 * Lowest - `tools_def.txt` entry
 
-An example using the Family tag follows:
+Within a given `[BuildOptions]` section, the following rules apply:
+
+* BUILDRULEFAMILY takes precedence over FAMILY
+* Non-scoped options apply regardless of precedence of other options
+
+An example using the Scope tag follows:
 
 `MSFT:*_*_*_CC_FLAGS = /D MDEPKG_NDEBUG`
 
-An optional, special Family tag can be used at the start of the command line,
-using a colon ":" character after the `Family` tag. If not specified,
+An optional, special `Scope` tag can be used at the start of the command line,
+using a colon ":" character after the `Scope` tag. If not specified,
 specific tool chain tags must be specified (the use of the asterisk "*" wild
-card character is not permitted.)
+card character is permitted to apply to all toolchains.)
 
 **********
-**Note:** The following is an example which does not use the Family tag, and
+**Note:** The following is an example which does not use the `Scope` tag, and
 specific to a specific tool chain tag name:
 **********
 
@@ -216,6 +221,16 @@ The logical result is:
 
 `*_*_*_TEST_FLAGS = /e /f`
 
+The only exception to this is the precedence of the Scope tag. A BUILDRULEFAMILY will
+take precedence over a FAMILY scope tag. For example, in a CLANGPDB build, `/ALIGN:0x1000` would
+be chosen here, whereas a GCC toolchain or CLANGDWARF build would choose `-z common-page-size=0x1000`.
+
+```ini
+[BuildOptions]
+  CLANGPDB:*_*_*_DLINK_FLAGS = /ALIGN:0x1000
+  GCC:*_*_*_DLINK_FLAGS = -z common-page-size=0x1000
+```
+
 #### Prototype
 
 ```c
@@ -225,15 +240,15 @@ The logical result is:
 <Statements>   ::= {<MacroDefinition>} {<IncludeStatement>}
                    {<TS> <BStatement>}
 <BStatement>   ::= {<ToolFlag>} {<ToolPath>} {<ToolCmd>} {<Other>}
-<ToolFlag>     ::= [<Family> ":"] <FlagSpec> <Equal> <Flags> <EOL>
-<ToolPath>     ::= [<Family> ":"] <PathSpec> <Equal> <PATH> <EOL>
-<ToolCmd>      ::= [<Family> ":"] <CmdSpec> <ReplaceEq>
+<ToolFlag>     ::= [<Scope> ":"] <FlagSpec> <Equal> <Flags> <EOL>
+<ToolPath>     ::= [<Scope> ":"] <PathSpec> <Equal> <PATH> <EOL>
+<ToolCmd>      ::= [<Scope> ":"] <CmdSpec> <ReplaceEq>
                    <ExecCmd> <EOL>
-<Other>        ::= [<Family> ":"] <OtherSpec> <Equal> <String> <EOL>
+<Other>        ::= [<Scope> ":"] <OtherSpec> <Equal> <String> <EOL>
 <Equal>        ::= {<AppendEq>} {<ReplaceEq>}
 <AppendEq>     ::= <Eq>
 <ReplaceEq>    ::= <TS> "==" <TS>
-<Family>       ::= _Family_
+<Scope>       ::= _FamilyOrBuildRuleFamily_
 <ToolSpec>     ::= <Target> "_" <TagName> "_" <TargetArch> "_" <ToolCode>
 <FlagSpec>     ::= <ToolSpec> "_FLAGS"
 <PathSpec>     ::= <ToolSpec> "_DPATH"
@@ -250,10 +265,11 @@ The logical result is:
 
 #### Parameters
 
-**_Family_**
+**_Scope_**
 
-Must match a `FAMILY` name defined in the EDK II `tools_def.txt` file. If not
-present, then the entry is valid for all tool chain families.
+Must match a `FAMILY` or `BUILDRULEFAMILY` name defined in the EDK II `tools_def.txt` file. If not
+present, then the entry is valid for all toolchains. A `BUILDRULEFAMILY` scope will take precedence over
+a `FAMILY` scope in the same `[BuildOptions]` section.
 
 **_Target_**
 
